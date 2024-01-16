@@ -26,15 +26,65 @@ KK677 28
 KTJJT 220
 QQQJA 483`;
 
+const test2 = 
+`2345A 1
+Q2KJJ 13
+Q2Q2Q 19
+T3T3J 17
+T3Q33 11
+2345J 3
+J345A 2
+32T3K 5
+T55J5 29
+KK677 7
+KTJJT 34
+QQQJA 31
+JJJJJ 37
+JAAAA 43
+AAAAJ 59
+AAAAA 61
+2AAAA 23
+2JJJJ 53
+JJJJ2 41`;
+
+
 const parser = (doc) => doc.split('\n')
 
 const rankHand = (hand) => {
   const findFirstRank = (cards) => {
+    // TODO: sort the cards
     const countingCards = (hand) => {
       return hand.reduce((acc, card) => {
         typeof(acc[card]) === 'number' ? acc[card] += 1 : acc[card] = 1;
         return acc
       }, {});
+    }
+
+    const addJokerCount = (countCard) => {
+      if (countCard["J"] && countCard["J"] !== 5) {
+        const cardWithMostApparitions = {
+          nbApparitions: -1,
+          typeCard: null
+        }
+
+        for (const [contenderTypeCard, nbApparitions] of Object.entries(countCard)) {
+          if (contenderTypeCard === "J") {
+            continue;
+          }
+
+          if (nbApparitions <= cardWithMostApparitions.nbApparitions) {
+            continue;
+          }
+
+          cardWithMostApparitions.nbApparitions = nbApparitions;
+          cardWithMostApparitions.typeCard = contenderTypeCard;
+        }
+
+        const nbJokers = countCard["J"];
+        countCard[cardWithMostApparitions.typeCard] += nbJokers;
+        countCard["J"] = 0;
+      }
+      return countCard;
     }
 
     const ranks = {
@@ -44,11 +94,13 @@ const rankHand = (hand) => {
       3: (count) => Math.max(...Object.values(count)) === 3,
       4: (count) => Object.values(count).filter(cardApparition => cardApparition === 2).length === 2,
       5: (count) => Object.values(count).includes(2),
+      6: (_count) => true
     }
 
+    const countCard = countingCards(cards);
+    const countCardWithJokers = addJokerCount(countCard);
     for (const [rank, condition] of Object.entries(ranks)) {
-      const countCard = countingCards(cards);
-      if (condition(countCard)) {
+      if (condition(countCardWithJokers)) {
         return rank;
       }
     }
@@ -57,7 +109,7 @@ const rankHand = (hand) => {
   }
 
   const cards = hand.split('');  
-  const strengthCards = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+  const strengthCards = ['A', 'K', 'Q', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'J'];
   const secondRank = cards.map(card => strengthCards.findIndex(strength => strength === card));
 
   return {
@@ -73,7 +125,6 @@ const rankPlayers = (playerInfos) => {
     const { firstRank: firstRankPlayer2, secondRank: secondRankPlayer2 } = player2;
 
     if (firstRankPlayer1 !== firstRankPlayer2) {
-
       return firstRankPlayer1 > firstRankPlayer2 ? -1 : 1;
     } 
 
