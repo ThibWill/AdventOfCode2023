@@ -23,12 +23,11 @@ const test =
 .......#..
 #...#.....`;
 
-const addSpace = (space) => {
-  return space.reduce((acc, curr, index) => {
-    if (!curr.includes('#')) {
-      acc.push(curr);
+const findSpaceExpended1D = (space) => {
+  return space.reduce((acc, spaceLine, coord) => {
+    if (!spaceLine.includes('#')) {
+      acc.push(coord);
     }
-    acc.push(curr);
     return acc;
   }, [])
 }
@@ -48,13 +47,16 @@ const turnSpace = (spaceRows) => {
   return turnedSpace;
 }
 
-const spaceExpends = (space) => {
-  const spaceRows = space.split('\n');
+const findSpaceExpended2D = (spaceRows) => {
+  const spaceExpended = {
+    rows: findSpaceExpended1D(spaceRows)
+  };
+  const turnedSpace = turnSpace(spaceRows);
 
-  const space1 = addSpace(spaceRows);
-  const turnedSpace = turnSpace(space1);
-  const space2 = addSpace(turnedSpace);
-  return turnSpace(space2);
+  return {
+    ...spaceExpended,
+    columns: findSpaceExpended1D(turnedSpace)
+  }
 }
 
 const findStars = (space) => {
@@ -70,17 +72,43 @@ const findStars = (space) => {
   return stars;
 }
 
-const findDistanceStars = (stars) => {
+const findDistanceStars = (stars, spaceExpended) => {
   let distances = 0;
   for (const star of stars) {
     distances += stars.reduce((acc, otherStar) => {
-      return acc + Math.abs(otherStar[0] - star[0]) + Math.abs(otherStar[1] - star[1]);
+      const starRow = otherStar[0];
+      const starColumn = otherStar[1];
+      const otherStarRow = star[0];
+      const otherStarColumn = star[1];
+
+      let distanceTwoStar = spaceExpended.rows.reduce((acc, spaceExpendedRow) => {
+        if (starRow < spaceExpendedRow && otherStarRow > spaceExpendedRow) {
+          acc += 1;
+        } else if (starRow > spaceExpendedRow && otherStarRow < spaceExpendedRow) {
+          acc += 1;
+        }
+        return acc;
+      }, 0);
+
+      distanceTwoStar += spaceExpended.columns.reduce((acc, spaceExpendedColumn) => {
+        if (starColumn < spaceExpendedColumn && otherStarColumn > spaceExpendedColumn) {
+          acc += 1;
+        } else if (starColumn > spaceExpendedColumn && otherStarColumn < spaceExpendedColumn) {
+          acc += 1;
+        }
+        return acc;
+      }, 0);
+
+      distanceTwoStar *= 999999;
+
+      return acc + distanceTwoStar + Math.abs(otherStar[0] - star[0]) + Math.abs(otherStar[1] - star[1]);
     }, 0)
   }
   console.log(distances / 2)
 }
 
 const beforeSpace = await loadDocument();
-const expendedSpace = spaceExpends(beforeSpace);
-const stars = findStars(expendedSpace);
-findDistanceStars(stars)
+const spaceRows = beforeSpace.split('\n');
+const spaceExpended = findSpaceExpended2D(spaceRows);
+const stars = findStars(spaceRows);
+findDistanceStars(stars, spaceExpended)
