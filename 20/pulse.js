@@ -2,6 +2,18 @@ const PULSE_TYPE = {
   LOW: false,
   HIGH: true
 }
+let nbLowPulses = 0;
+let nbHighPulses = 0;
+const generatePulse = {
+  low: () => {
+    nbLowPulses += 1;
+    return PULSE_TYPE.LOW;
+  },
+  high: () => {
+    nbHighPulses += 1;
+    return PULSE_TYPE.HIGH;
+  }
+}
 
 /*
 Flip-flop modules (prefix %) are either on or off; they are initially off. 
@@ -32,14 +44,19 @@ const flipFlopModule = (moduleName) => {
     }
   }
 
-  const sendPulse = (_pulseInput) => {
+  const sendPulse = (pulseInput) => {
     if (pulseInput) {
       return;
-    } 
+    }
 
-    const pulseOutput = state.on ? PULSE_TYPE.HIGH : PULSE_TYPE.LOW;
+    /*console.log(state.moduleName);
+    console.log()
+    console.log('INPUT PULSE: ', pulseInput)
+    console.log('DESTINATION MODULES: ', state.modulesDestination.map(m => m.getName()))*/
+
+    const pulseOutput = state.on ? generatePulse.high() : generatePulse.low();
     for (const moduleDestination of state.modulesDestination) {
-      moduleDestination.updateState(pulseOutput);
+      moduleDestination.updateState(pulseOutput, state.moduleName);
     }
 
     for (const moduleDestination of state.modulesDestination) {
@@ -90,14 +107,16 @@ const conjunctionModule = (moduleName) => {
     }
   }
 
-  const updateState = (pulseInput, module) => {
-    state.modulesConnected[module.getName()] = pulseInput;
+  const updateState = (pulseInput, moduleName) => {
+    state.modulesConnected[moduleName] = pulseInput;
   }
 
   const sendPulse = (_pulseInput) => {
-    const pulseOutput = Object.values(state.modulesConnected).every(pulse => pulse === PULSE_TYPE.HIGH);
+    const pulsesRemembered = Object.values(state.modulesConnected).every(pulse => pulse === PULSE_TYPE.HIGH);
+    const pulseOutput = pulsesRemembered ? generatePulse.low() : generatePulse.high();
+
     for (const moduleDestination of state.modulesDestination) {
-      moduleDestination.updateState(pulseOutput);
+      moduleDestination.updateState(pulseOutput, state.moduleName);
     }
 
     for (const moduleDestination of state.modulesDestination) {
@@ -135,17 +154,19 @@ const broadcastModule = (moduleName) => {
     state.modulesDestination = [...modulesDestinationInstances];
   }
 
-  const updateState = (pulseInput, module) => {
-    state.modulesConnected[module.getName()] = pulseInput;
-  }
+  const updateState = () => {}
 
   const sendPulse = (pulseInput) => {
+    const pulseOutput = pulseInput;
+    const comptPulse = pulseOutput ? generatePulse.high : generatePulse.low;
+
     for (const moduleDestination of state.modulesDestination) {
-      moduleDestination.updateState(pulseInput);
+      comptPulse();
+      moduleDestination.updateState(pulseOutput, state.moduleName);
     }
 
     for (const moduleDestination of state.modulesDestination) {
-      moduleDestination.sendPulse(pulseInput);
+      moduleDestination.sendPulse(pulseOutput);
     }
   }
 
@@ -160,33 +181,6 @@ const broadcastModule = (moduleName) => {
     getName
   };
 }
-
-
-
-/*
-Here at Desert Machine Headquarters, there is a module with a single button on it called, aptly, the button module.
- When you push the button, a single low pulse is sent directly to the broadcaster module.
-*/
-
-/*const buttonModule = (moduleName, moduleDestination) => {
-  const state = {
-    moduleDestination,
-    moduleName
-  };
-
-  const sendPulse = () => {
-    state.moduleDestination.processPulse(PULSE_TYPE.LOW);
-  }
-
-  const getName = () => {
-    return state.moduleName;
-  }
-
-  return {
-    sendPulse,
-    getName
-  }
-}*/
 
 const parser = (modulesConfiguration) => {
   const lines = modulesConfiguration.split('\n');
@@ -223,7 +217,7 @@ const initModules = (modulesConfigurationParsed) => {
     moduleConfiguration.instance.init(modulesConfigurationParsed, moduleConfiguration.modulesDestination);
   }
 
-  return modulesConfigurationParsed.map(m => m.instance.getName());
+  return modulesConfigurationParsed;
 }
 
 const test = `broadcaster -> a, b, c
@@ -232,5 +226,19 @@ const test = `broadcaster -> a, b, c
 %c -> inv
 &inv -> a`;
 
-const modulesConfigurationParsed = parser(test);
-console.log(initModules(modulesConfigurationParsed))
+const test2 = `broadcaster -> a
+%a -> inv, con
+&inv -> b
+%b -> con
+&con -> output`;
+
+const modulesConfigurationParsed = parser(test2);
+const modules = initModules(modulesConfigurationParsed);
+
+const broadcaster = modules.find(m => m.moduleName === 'broadcaster');
+for (let i = 0; i < 1; i++) {
+  broadcaster.instance.sendPulse(generatePulse.low());
+}
+
+console.log("LOW PULSES: ", nbLowPulses);
+console.log("HIGH PULSES: ", nbHighPulses);
