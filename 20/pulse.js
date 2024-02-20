@@ -2,18 +2,8 @@ const PULSE_TYPE = {
   LOW: false,
   HIGH: true
 }
-let nbLowPulses = 0;
-let nbHighPulses = 0;
-const generatePulse = {
-  low: () => {
-    nbLowPulses += 1;
-    return PULSE_TYPE.LOW;
-  },
-  high: () => {
-    nbHighPulses += 1;
-    return PULSE_TYPE.HIGH;
-  }
-}
+
+const pulseQueue = [];
 
 /*
 Flip-flop modules (prefix %) are either on or off; they are initially off. 
@@ -49,18 +39,13 @@ const flipFlopModule = (moduleName) => {
       return;
     }
 
-    /*console.log(state.moduleName);
-    console.log()
-    console.log('INPUT PULSE: ', pulseInput)
-    console.log('DESTINATION MODULES: ', state.modulesDestination.map(m => m.getName()))*/
-
-    const pulseOutput = state.on ? generatePulse.high() : generatePulse.low();
+    const pulseOutput = state.on ? PULSE_TYPE.HIGH : PULSE_TYPE.LOW;
     for (const moduleDestination of state.modulesDestination) {
       moduleDestination.updateState(pulseOutput, state.moduleName);
     }
 
     for (const moduleDestination of state.modulesDestination) {
-      moduleDestination.sendPulse(pulseOutput);
+      pulseQueue.unshift({ pulseType: pulseOutput, moduleDestination });
     }
   }
 
@@ -113,14 +98,14 @@ const conjunctionModule = (moduleName) => {
 
   const sendPulse = (_pulseInput) => {
     const pulsesRemembered = Object.values(state.modulesConnected).every(pulse => pulse === PULSE_TYPE.HIGH);
-    const pulseOutput = pulsesRemembered ? generatePulse.low() : generatePulse.high();
+    const pulseOutput = pulsesRemembered ? PULSE_TYPE.LOW : PULSE_TYPE.HIGH;
 
     for (const moduleDestination of state.modulesDestination) {
       moduleDestination.updateState(pulseOutput, state.moduleName);
     }
 
     for (const moduleDestination of state.modulesDestination) {
-      moduleDestination.sendPulse(pulseOutput);
+      pulseQueue.unshift({ pulseType: pulseOutput, moduleDestination });
     }
   }
 
@@ -157,16 +142,14 @@ const broadcastModule = (moduleName) => {
   const updateState = () => {}
 
   const sendPulse = (pulseInput) => {
-    const pulseOutput = pulseInput;
-    const comptPulse = pulseOutput ? generatePulse.high : generatePulse.low;
+    const pulseOutput = pulseInput ? PULSE_TYPE.HIGH : PULSE_TYPE.LOW;
 
     for (const moduleDestination of state.modulesDestination) {
-      comptPulse();
-      moduleDestination.updateState(pulseOutput, state.moduleName);
+       moduleDestination.updateState(pulseOutput, state.moduleName);
     }
 
     for (const moduleDestination of state.modulesDestination) {
-      moduleDestination.sendPulse(pulseOutput);
+      pulseQueue.unshift({ pulseType: pulseOutput, moduleDestination });
     }
   }
 
@@ -199,6 +182,30 @@ const parser = (modulesConfiguration) => {
   return modulesConfigurationParsed;
 }
 
+const outputModule = (moduleName) => {
+  const state = {
+    modulesDestination: [],
+    moduleName  
+  };
+
+  const init = () => {}
+
+  const updateState = () => {}
+
+  const sendPulse = () => {}
+
+  const getName = () => {
+    return state.moduleName;
+  }
+
+  return {
+    init,
+    updateState,
+    sendPulse,
+    getName
+  };
+}
+
 const initModules = (modulesConfigurationParsed) => {
 
   // Factory
@@ -207,10 +214,19 @@ const initModules = (modulesConfigurationParsed) => {
       moduleConfiguration.instance = flipFlopModule(moduleConfiguration.moduleName);
     } else if (moduleConfiguration.moduleType === "&") {
       moduleConfiguration.instance = conjunctionModule(moduleConfiguration.moduleName);
-    } else {
+    } else if (moduleConfiguration.moduleName === "broadcaster") {
       moduleConfiguration.instance = broadcastModule(moduleConfiguration.moduleName);
+    } else {
+      moduleConfiguration.instance = outputModule(moduleConfiguration.moduleName);
     }
   }
+
+  modulesConfigurationParsed.push({
+    moduleType: null,
+    moduleName: 'output',
+    modulesDestination: [],
+    instance: outputModule('output')
+  })
 
   // Init each module
   for (const moduleConfiguration of modulesConfigurationParsed) {
@@ -232,12 +248,20 @@ const test2 = `broadcaster -> a
 %b -> con
 &con -> output`;
 
+let nbLowPulses = 0;
+let nbHighPulses = 0;
+
 const modulesConfigurationParsed = parser(test2);
 const modules = initModules(modulesConfigurationParsed);
 
 const broadcaster = modules.find(m => m.moduleName === 'broadcaster');
-for (let i = 0; i < 1; i++) {
-  broadcaster.instance.sendPulse(generatePulse.low());
+for (let i = 0; i < 1000; i++) {
+  pulseQueue.unshift({ moduleDestination: broadcaster.instance, pulseType: PULSE_TYPE.LOW });
+  while (pulseQueue.length) {
+    const nextPulse = pulseQueue.pop();
+    nextPulse.pulseType ? (nbHighPulses += 1) : (nbLowPulses += 1);
+    nextPulse.moduleDestination.sendPulse(nextPulse.pulseType);
+  }
 }
 
 console.log("LOW PULSES: ", nbLowPulses);
