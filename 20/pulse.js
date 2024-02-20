@@ -214,19 +214,24 @@ const initModules = (modulesConfigurationParsed) => {
       moduleConfiguration.instance = flipFlopModule(moduleConfiguration.moduleName);
     } else if (moduleConfiguration.moduleType === "&") {
       moduleConfiguration.instance = conjunctionModule(moduleConfiguration.moduleName);
-    } else if (moduleConfiguration.moduleName === "broadcaster") {
-      moduleConfiguration.instance = broadcastModule(moduleConfiguration.moduleName);
     } else {
-      moduleConfiguration.instance = outputModule(moduleConfiguration.moduleName);
+      moduleConfiguration.instance = broadcastModule(moduleConfiguration.moduleName);
     }
   }
 
-  modulesConfigurationParsed.push({
-    moduleType: null,
-    moduleName: 'output',
-    modulesDestination: [],
-    instance: outputModule('output')
-  })
+  const uniqueModulesDestination = new Set(modulesConfigurationParsed.map(m => m.modulesDestination).flat());
+  const modulesName = modulesConfigurationParsed.map(m => m.instance.getName());
+
+  for (const uniqueModuleDestination of uniqueModulesDestination) {
+    if (!modulesName.includes(uniqueModuleDestination)) {
+      modulesConfigurationParsed.push({
+        moduleType: null,
+        moduleName: uniqueModuleDestination,
+        modulesDestination: [],
+        instance: outputModule(uniqueModuleDestination)
+      });
+    }
+  }
 
   // Init each module
   for (const moduleConfiguration of modulesConfigurationParsed) {
@@ -248,10 +253,69 @@ const test2 = `broadcaster -> a
 %b -> con
 &con -> output`;
 
+const data = `%hm -> cr
+%qc -> nd
+&dh -> rm
+%ph -> zz
+%ps -> kc, dt
+%qb -> dt
+%jl -> vt, tb
+%fh -> dm, gr
+broadcaster -> np, mg, vd, xr
+%zz -> sq
+&rm -> rx
+%nd -> br
+%nx -> vr, vt
+%qf -> dt, dv
+%np -> xm, ph
+%dm -> nf, gr
+%sq -> kj
+%bv -> fp, xm
+%br -> kt
+%mg -> dz, gr
+&dt -> vd, dv, dh, hm, ks, hd, kq
+%ks -> qf
+&qd -> rm
+%xr -> vt, rn
+%vr -> tg, vt
+%lc -> xm
+%tq -> gr, fh
+%cr -> kq, dt
+%vd -> dt, ks
+%tb -> nx
+%dz -> gr, fd
+&gr -> dp, mg, fd, qn
+%nf -> gr
+%dv -> hm
+%qj -> lc, xm
+%kc -> dt, gf
+%gf -> dt, qb
+%vh -> xm, sv
+%sr -> vt
+%fp -> qg, xm
+%kj -> vh
+%pc -> tq, gr
+%kq -> hd
+%xd -> xg, gr
+%tg -> sr, vt
+&bb -> rm
+%rn -> vt, qc
+%hd -> ps
+%qg -> xm, qj
+&dp -> rm
+%qn -> pc
+%kt -> jl
+%sv -> bv
+&vt -> bb, nd, qc, xr, br, tb, kt
+%fd -> mx
+&xm -> zz, sv, sq, ph, kj, np, qd
+%xg -> gr, qn
+%mx -> gr, xd`;
+
 let nbLowPulses = 0;
 let nbHighPulses = 0;
 
-const modulesConfigurationParsed = parser(test2);
+const modulesConfigurationParsed = parser(data);
 const modules = initModules(modulesConfigurationParsed);
 
 const broadcaster = modules.find(m => m.moduleName === 'broadcaster');
