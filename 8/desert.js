@@ -53,15 +53,13 @@ const parser = (doc) => {
   }
 }
 
-const getStartingDirections = (nodes) => {
-  const startingDirections = [];
-  for (const [name, directions] of Object.entries(nodes)) {
-    if (name.endsWith('A')) {
-      startingDirections.push(directions)
-    }
-  }
-  return startingDirections;
-};
+const findStartNodesNames = (nodes) => {
+  return Object.keys(nodes).filter(node => node.endsWith('A'));
+}
+
+const findEndNodesNames = (nodes) => {
+  return Object.keys(nodes).filter(node => node.endsWith('Z'));
+}
 
 const document = await loadDocument();
 const { 
@@ -69,23 +67,62 @@ const {
   hashMapNodes
 } = parser(document)
 
-let currentChoicesDirection = getStartingDirections(hashMapNodes);
-let nbSteps = 0;
-let arrived = false;
+let startNodesNames = findStartNodesNames(hashMapNodes);
+let endNodesNames = findEndNodesNames(hashMapNodes);
 
-while (!arrived) {
-  const instruction = instructions[nbSteps % instructions.length]
-  nbSteps += 1;
+const findCloserEndingNode = (hashMapNodes, startNodeName, endNodeNames) => {
 
-  const newNodesName = currentChoicesDirection.map(directions => directions[instruction]);
-  if (newNodesName.every(newNodeName => newNodeName.endsWith('Z'))) {
-    break;
+  let nbSteps = 0;
+  let currentNodeName = startNodeName;
+  
+  while (true) {
+    const instruction = instructions[nbSteps % instructions.length];
+    nbSteps += 1;
+    
+    currentNodeName = hashMapNodes[currentNodeName][instruction];
+    
+    if (endNodeNames.includes(currentNodeName)) {
+      break;
+    }
   }
 
-  currentChoicesDirection = [];
-  for (const newNodeName of newNodesName) {
-    currentChoicesDirection.push(hashMapNodes[newNodeName]);
+  return {
+    closerEndNode: currentNodeName,
+    nbSteps
   }
 }
 
-console.log(nbSteps);
+const mapCloserEndNode = {};
+for (let startNodeName of startNodesNames) {
+  mapCloserEndNode[startNodeName] = findCloserEndingNode(hashMapNodes, startNodeName, endNodesNames);
+}
+
+const nbSteps = Object.values(mapCloserEndNode).map(end => end.nbSteps).map(Number);
+const nbRepetitions = Array(nbSteps.length).fill(1);
+
+let stop = false;
+while (!stop) {
+  let minTotalNbSteps;
+  let minNbStepsKey;
+  stop = true;
+  for (let i = 0; i < nbSteps.length; i++) {
+    const totalNbSteps = nbSteps[i] * nbRepetitions[i];
+    if ((minNbStepsKey !== undefined) && minTotalNbSteps !== totalNbSteps) {
+      stop = false;
+    }
+
+    if ((minNbStepsKey === undefined) || totalNbSteps < minTotalNbSteps) {
+      minTotalNbSteps = totalNbSteps;
+      minNbStepsKey = i;
+    }
+  }
+
+  if (!stop) {
+    nbRepetitions[minNbStepsKey] += 1;
+  }
+  minNbStepsKey = undefined;
+}
+
+console.log(nbSteps, nbRepetitions);
+
+
