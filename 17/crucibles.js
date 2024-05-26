@@ -46,6 +46,7 @@ const loadGraphData = (data) => {
 
   while (vertexQueue.length) {
     const currentVertex = vertexQueue.pop();
+    console.log(vertexQueue.length);
 
     if (graph.has(JSON.stringify(currentVertex))) {
       continue;
@@ -58,7 +59,7 @@ const loadGraphData = (data) => {
       { row: currentVertex.row, column: currentVertex.column + 1, direction: "RIGHT" }
     ];
 
-    let newVertexes = [];
+    let edges = [];
     for (const { row, column, direction } of newCoordsVertex) {
       if (row < 0 || column < 0 || row >= data.length || column >= data[0].length) {
         continue;
@@ -69,22 +70,39 @@ const loadGraphData = (data) => {
         continue;
       }
 
-      if (row === (data.length - 1) && column === (data[0].length - 1) && ((direction !== currentVertex.direction) || (direction === currentVertex.direction && currentVertex.times < 3))) {
-        // End
-        newVertexes.push({ row , column });
-        break;
-      } 
+      let times;
+      if (direction === currentVertex.direction) {
+        // Maximum 10 blocks in one direction
+        if (currentVertex.times >= 10) {
+          continue;
+        }
 
-      if (direction === currentVertex.direction && currentVertex.times < 3) {
-        newVertexes.push({ row, column, direction, times: currentVertex.times + 1 });
-      } else if (direction !== currentVertex.direction) {
-        newVertexes.push({ row, column, direction, times: 1 });
+        // End
+        if ((row === (data.length - 1) && column === (data[0].length - 1)) && currentVertex.times >= 4) {
+          const endVertex = { row, column };
+          vertexQueue.push(endVertex)
+          edges.push({ to: JSON.stringify(endVertex), weight: Number(data[row][column]) })
+        }
+
+        times = currentVertex.times + 1;
+      } else {
+        // Have to do at least 4 blocks in one direction
+        if (currentVertex.times < 4) {
+          continue;
+        }
+
+        times = 1;
       }
+
+      if (row === (data.length - 1) && column === (data[0].length - 1)) {
+        continue;
+      }
+
+      const newVertex = { row, column, direction, times };
+      vertexQueue.push(newVertex);
+      edges.push({ to: JSON.stringify(newVertex), weight: Number(data[row][column]) })
     }
     
-    vertexQueue = vertexQueue.concat(newVertexes);
-
-    const edges = newVertexes.map(vertex => ({ to: JSON.stringify(vertex), weight: Number(data[vertex.row][vertex.column]) }));
     graph.set(JSON.stringify(currentVertex), edges);
   }
   return graph;
