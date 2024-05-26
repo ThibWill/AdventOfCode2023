@@ -26,6 +26,11 @@ const test =
 2546548887735
 4322674655533`;
 
+const testMini = 
+`241
+321
+325`;
+
 const parser = (doc) =>  doc.split('\n').map(line => line.split(''));
 
 const loadGraphData = (data) => {
@@ -45,8 +50,6 @@ const loadGraphData = (data) => {
     if (graph.has(JSON.stringify(currentVertex))) {
       continue;
     }
-
-    console.log(vertexQueue.length);
 
     let newCoordsVertex = [
       { row: currentVertex.row - 1, column: currentVertex.column, direction: "UP" },
@@ -72,10 +75,10 @@ const loadGraphData = (data) => {
         break;
       } 
 
-      if (direction === currentVertex.direction) {
-        newVertexes = newVertexes.concat(Array.from(new Array(3 - currentVertex.times), (_e, i) => ({ row, column, direction, times: i + currentVertex.times + 1 })));
-      } else {
-        newVertexes = newVertexes.concat(Array.from(new Array(3), (_e, i) => ({ row, column, direction, times: i + 1 })));
+      if (direction === currentVertex.direction && currentVertex.times < 3) {
+        newVertexes.push({ row, column, direction, times: currentVertex.times + 1 });
+      } else if (direction !== currentVertex.direction) {
+        newVertexes.push({ row, column, direction, times: 1 });
       }
     }
     
@@ -145,8 +148,5 @@ const time = console.time();
 const { distances, previous } = dijkstraSearchShortestPath(graph, start);
 console.timeEnd(time);
 
-
-//const path = buildPath(previous, end);
-// console.log(path);
 
 console.log(distances.get(end))
