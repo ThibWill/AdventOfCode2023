@@ -41,6 +41,11 @@ const loadGraphData = (data) => {
 
   while (vertexQueue.length) {
     const currentVertex = vertexQueue.pop();
+
+    if (graph.has(JSON.stringify(currentVertex))) {
+      continue;
+    }
+
     console.log(vertexQueue.length);
 
     let newCoordsVertex = [
@@ -64,7 +69,7 @@ const loadGraphData = (data) => {
       if (row === (data.length - 1) && column === (data[0].length - 1) && ((direction !== currentVertex.direction) || (direction === currentVertex.direction && currentVertex.times < 3))) {
         // End
         newVertexes.push({ row , column });
-        continue;
+        break;
       } 
 
       if (direction === currentVertex.direction) {
@@ -74,7 +79,7 @@ const loadGraphData = (data) => {
       }
     }
     
-    vertexQueue = vertexQueue.concat(newVertexes.filter(vertex => !graph.has(JSON.stringify(vertex))));
+    vertexQueue = vertexQueue.concat(newVertexes);
 
     const edges = newVertexes.map(vertex => ({ to: JSON.stringify(vertex), weight: Number(data[vertex.row][vertex.column]) }));
     graph.set(JSON.stringify(currentVertex), edges);
@@ -84,61 +89,31 @@ const loadGraphData = (data) => {
 
 
 const dijkstraSearchShortestPath = (graph, startWeight) => {
-  const seen = new Map();
   const previous = new Map();
   const distances = new Map();
+  let priorityQueue = [];
 
   for (let key of graph.keys()) {
-    seen.set(key, false);
     previous.set(key, -1);
     distances.set(key, Infinity);
   }
+  priorityQueue.push([0, startWeight]);
   distances.set(startWeight, 0);
 
-  const hasUnseen = (seen, distances) => {
-    for (const [key, value] of seen.entries()) { 
-      if (value === false && distances.get(key) < Infinity) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  const getLowest = (seen, distances) => {
-    let lowestVertex;
-    let lowestDistance = Infinity;
-    for (const [key, value] of seen.entries()) {
-      if (value === true) {
-        continue;
-      }
-
-      const currentDistance = distances.get(key);
-      if (currentDistance < lowestDistance) {
-        lowestVertex = key;
-        lowestDistance = currentDistance
-      }
-    }
-    return lowestVertex;
-  }
-
-  while (hasUnseen(seen, distances)) {
-    const lowest = getLowest(seen, distances);
+  while (priorityQueue.length) {
+    const [_distance, lowest] = priorityQueue.shift();
     const edges = graph.get(lowest);
-    
-    seen.set(lowest, true)
-
     for (const edge of edges) {
       const destination = edge.to;
-      if (seen.get(destination) === true) {
-        continue;
-      }
-
       const distance = distances.get(lowest) + edge.weight;
+
       if (distance < distances.get(destination)) {
         distances.set(destination, distance);
-        previous.set(destination, lowest);
+        priorityQueue.push([distances.get(destination), destination]);
       }
     }
+
+    priorityQueue = priorityQueue.toSorted((a, b) => a[0] - b[0]);
   }
 
   return {
@@ -160,14 +135,16 @@ function buildPath(previous, end) {
 }
 
 const doc = await loadDocument();
-
 const parsed = parser(doc);
 const graph = loadGraphData(parsed);
 
 const start = '{"row":0,"column":0}';
 const end = JSON.stringify({ row: parsed.length - 1, column: parsed[0].length - 1 });
 
+const time = console.time();
 const { distances, previous } = dijkstraSearchShortestPath(graph, start);
+console.timeEnd(time);
+
 
 //const path = buildPath(previous, end);
 // console.log(path);
