@@ -1,3 +1,16 @@
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+async function loadDocument() {
+  try {
+    const filePath = resolve('./layout.txt');
+    const contents = await readFile(filePath, { encoding: 'utf8' })
+    return contents.trim()
+  } catch (err) {
+    console.error(err.message);
+  }
+}
+
 const test = 
 `.|...\\....
 |.-.\\.....
@@ -10,6 +23,13 @@ const test =
 .|....-|.\\
 ..//.|....`;
 
+const test2 = 
+`......|...\\..\\...
+..../........|...
+....\\.-.../......
+......|....../...
+.................`;
+
 const parser = (doc) => {
   return doc.split('\n');
 }
@@ -21,7 +41,7 @@ const DIRECTION = {
   LEFT: "LEFT"
 };
 
-const beamHandler = (() => {
+const beamStack = (() => {
   const startBeam = {
     start: {
       row: 0,
@@ -33,7 +53,7 @@ const beamHandler = (() => {
   const records = [startBeam];
   const stack = [startBeam];
 
-  const addBeam = (beam) => {
+  const push = (beam) => {
     const existingBeam = records.find((record) => record.start.row === beam.start.row && record.start.column === beam.start.column && record.direction === beam.direction);
     if (existingBeam) {
       return;
@@ -43,18 +63,18 @@ const beamHandler = (() => {
     records.push(beam);
   }
 
-  const getNextBeam = () => stack.pop();
+  const pop = () => stack.pop();
 
   return {
-    addBeam,
-    getNextBeam
+    push,
+    pop
   }
 })();
 
-const mirrorLeft = {
+const mirrorLeft = (position) => ({
   symbol: '\\',
-  reflect: (mirrorPosition, beamFrom) => {
-
+  position,
+  reflect: (beamFrom) => {
     const redirections = {
       "LEFT": [DIRECTION.UP],
       "RIGHT": [DIRECTION.DOWN],
@@ -63,17 +83,18 @@ const mirrorLeft = {
     }
 
     for (const redirection of redirections[beamFrom]) {
-      beamHandler.addBeam({
-        start: mirrorPosition,
+      beamStack.push({
+        start: position,
         direction: redirection
       });
     }
   }
-}
+});
 
-const mirrorRight = {
+const mirrorRight = (position) => ({
   symbol: '/',
-  reflect: (mirrorPosition, beamFrom) => {
+  position,
+  reflect: (beamFrom) => {
 
     const redirections = {
       "LEFT": [DIRECTION.DOWN],
@@ -83,17 +104,18 @@ const mirrorRight = {
     }
 
     for (const redirection of redirections[beamFrom]) {
-      beamHandler.addBeam({
-        start: mirrorPosition,
+      beamStack.push({
+        start: position,
         direction: redirection
       });
     }
   }
-}
+});
 
-const splitterHorizontal = {
+const splitterHorizontal = (position) => ({
   symbol: '-',
-  reflect: (mirrorPosition, beamFrom) => {
+  position,
+  reflect: (beamFrom) => {
 
     const redirections = {
       "LEFT": [DIRECTION.LEFT],
@@ -103,17 +125,18 @@ const splitterHorizontal = {
     }
 
     for (const redirection of redirections[beamFrom]) {
-      beamHandler.addBeam({
-        start: mirrorPosition,
+      beamStack.push({
+        start: position,
         direction: redirection
       });
     }
   }
-}
+});
 
-const splitterVertical = {
+const splitterVertical = (position) => ({
   symbol: '|',
-  reflect: (mirrorPosition, beamFrom) => {
+  position,
+  reflect: (beamFrom) => {
 
     const redirections = {
       "LEFT": [DIRECTION.DOWN, DIRECTION.UP],
@@ -123,20 +146,25 @@ const splitterVertical = {
     }
 
     for (const redirection of redirections[beamFrom]) {
-      beamHandler.addBeam({
-        start: mirrorPosition,
+      beamStack.push({
+        start: position,
         direction: redirection
       });
     }
   }
-}
+});
 
-const extractMirror = (space) => {
-  const mirrorTypes = [mirrorLeft, mirrorRight, splitterHorizontal, splitterVertical];
-  for (const mirrorType of mirrorTypes) {
-    if (mirrorType.symbol === space) {
-      return mirrorType;
-    }
+const mirrorFactory = (space, position) => {
+  const mirrorTypes = {
+    '\\': mirrorLeft, 
+    '/': mirrorRight, 
+    '-': splitterHorizontal, 
+    '|': splitterVertical
+  };
+
+  const mirrorType = mirrorTypes[space];
+  if (mirrorType) {
+    return mirrorType(position)
   }
 
   return null;
@@ -147,19 +175,16 @@ const extractMirrors = (layout) => {
   for (let rowNum = 0; rowNum < layout.length; rowNum++) {
     const row = layout[rowNum];
     for (let columnNum = 0; columnNum < row.length; columnNum++) {
-      const mirror = extractMirror(row[columnNum]);
+      const mirror = mirrorFactory(row[columnNum], {
+        row: rowNum, 
+        column: columnNum
+      });
 
       if (mirror === null) {
         continue;
       }
 
-      mirrors.push({
-        position: {
-          row: rowNum, 
-          column: columnNum
-        },
-        type: mirror
-      })
+      mirrors.push(mirror);
     }
   }
   return mirrors;
@@ -167,37 +192,24 @@ const extractMirrors = (layout) => {
 
 const findNextMirror = (mirrors, beam) => {
 
+  if (beam.start.row === 0 && beam.start.column === 0 && beam.direction === 'RIGHT') {
+    const isMirrorStart = mirrors.find(m => m.position.row === 0 && m.position.column === 0);
+    if (isMirrorStart) {
+      return isMirrorStart;
+    }
+  }
+
   const directionRules = {
-    "RIGHT": {
-      isNotInTheWay: (mirror, beam) => mirror.position.row !== beam.start.row,
-      isTheClosest: (mirror, beam, currentClosestMirror) => (mirror.position.column > beam.start.column) && (!currentClosestMirror || currentClosestMirror.position.column > mirror.position.column),
-      border: (layoutLimits, beam) => ({ row: beam.start.row, column: layoutLimits.column })
-    },
-    "LEFT": {
-      isNotInTheWay: (mirror, beam) => mirror.position.row !== beam.start.row,
-      isTheClosest: (mirror, beam, currentClosestMirror) => (mirror.position.column < beam.start.column) && (!currentClosestMirror || currentClosestMirror.position.column < mirror.position.column),
-      border: (_layoutLimits, beam) => ({ row: beam.start.row, column: 0 })
-    },
-    "DOWN": {
-      isNotInTheWay: (mirror, beam) => mirror.position.column !== beam.start.column,
-      isTheClosest: (mirror, beam, currentClosestMirror) => (mirror.position.row > beam.start.row) && (!currentClosestMirror || currentClosestMirror.position.row > mirror.position.row),
-      border: (layoutLimits, beam) => ({ row: layoutLimits.row, column: beam.start.column })
-    },
-    "UP": {
-      isNotInTheWay: (mirror, beam) => mirror.position.column !== beam.start.column,
-      isTheClosest: (mirror, beam, currentClosestMirror) => (mirror.position.row < beam.start.row) && (!currentClosestMirror || currentClosestMirror.position.row < mirror.position.row),
-      border: (_layoutLimits, beam) => ({ row: 0, column: beam.start.column })
-    },
+    "RIGHT": (mirror, beam, currentClosestMirror) => (mirror.position.row === beam.start.row) && (mirror.position.column > beam.start.column) && (!currentClosestMirror || currentClosestMirror.position.column > mirror.position.column),
+    "LEFT": (mirror, beam, currentClosestMirror) => (mirror.position.row === beam.start.row) && (mirror.position.column < beam.start.column) && (!currentClosestMirror || currentClosestMirror.position.column < mirror.position.column),
+    "DOWN": (mirror, beam, currentClosestMirror) => (mirror.position.column === beam.start.column) && (mirror.position.row > beam.start.row) && (!currentClosestMirror || currentClosestMirror.position.row > mirror.position.row),
+    "UP": (mirror, beam, currentClosestMirror) => (mirror.position.column === beam.start.column) && (mirror.position.row < beam.start.row) && (!currentClosestMirror || currentClosestMirror.position.row < mirror.position.row),
   }
 
   let currentClosestMirror = null;
-  const beamDirectionRules = directionRules[beam.direction];
+  const directionRule = directionRules[beam.direction];
   for (const mirror of mirrors) {
-    if (beamDirectionRules.isNotInTheWay(mirror, beam)) {
-      continue;
-    }
-
-    if (beamDirectionRules.isTheClosest(mirror, beam, currentClosestMirror)) {
+    if (directionRule(mirror, beam, currentClosestMirror)) {
       currentClosestMirror = mirror;
     }
   }
@@ -207,7 +219,6 @@ const findNextMirror = (mirrors, beam) => {
 
 const lights = new Set();
 const setLightenedSpaces = (layoutLimits, beam, nextMirror) => {
-
   const directionRules = {
     "RIGHT": {
       border: (layoutLimits, start) => ({ row: start.row, column: layoutLimits.column })
@@ -249,27 +260,41 @@ const setLightenedSpaces = (layoutLimits, beam, nextMirror) => {
   }
 }
 
-const start = (mirrors, beamHandler, layoutLimits) => {
+const start = (mirrors, beamStack, layoutLimits) => {
   let compt = 0;
-  let beam = beamHandler.getNextBeam();
-  while(beam) {
+  let beam = beamStack.pop();
+  while (beam) {
     const nextMirror = findNextMirror(mirrors, beam);
     setLightenedSpaces(layoutLimits, beam, nextMirror);
 
     if (nextMirror) {
-      nextMirror.type.reflect(nextMirror.position, beam.direction);
+      nextMirror.reflect(beam.direction);
     }
     compt ++;
-    beam = beamHandler.getNextBeam();
+    beam = beamStack.pop();
   }
 }
 
-const layout = parser(test);
+const doc = await loadDocument();
+const layout = parser(doc);
 const mirrors = extractMirrors(layout);
 
-start(mirrors, beamHandler, {
-  row: layout[0].length - 1,
-  column: layout.length - 1
+start(mirrors, beamStack, {
+  row: layout.length - 1,
+  column: layout[0].length - 1
 });
+console.log(lights.size);
 
-console.log(lights.size)
+/*const arrLights = Array.from(lights);
+let room = '';
+for (let row = 0; row < layout.length; row++) {
+  for (let column = 0; column < layout[0].length; column++) {
+    if (arrLights.find(e => e === `${row}, ${column}`)) {
+      room += '#';
+    } else {
+      room += '.';
+    }
+  }
+  room += '\n';
+}
+console.log(room);*/
